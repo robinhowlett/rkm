@@ -15,10 +15,6 @@ The system reads from the `handycapper` PostgreSQL schema (populated by the sibl
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Database: Postgres on robinpc via SSH tunnel
-ssh -f -N -L 5434:127.0.0.1:5432 robinpc
-# Connection: localhost:5434, user/pass: handycapper/handycapper, db: handycapper
-
 # Run scripts (all are standalone, run from project root)
 python scripts/compute_curves.py
 python scripts/compute_adjustments.py
@@ -28,7 +24,9 @@ python scripts/compute_form.py
 python scripts/compute_situations.py
 ```
 
-Scripts must run in order (each phase depends on prior phases). All use CSV + COPY for bulk writes (the SSH tunnel drops under sustained `executemany` load).
+Scripts must run in order (each phase depends on prior phases).
+
+**Each script WRITES to the database** — it TRUNCATEs its target table and COPYs results in via CSV. These are full recomputes, not incremental. Running a script replaces ALL prior data in that table. Use CSV + COPY (not executemany) because sustained individual inserts over SSH tunnels are unreliable.
 
 ## Architecture
 
@@ -60,7 +58,20 @@ Separate curves for sprint (≤6.5f) vs route (>6.5f) per horse per surface.
 
 - `db.py` — connection helpers (`connect()` for dict_row, `connect_raw()` for pandas compatibility)
 - `identity.py` — horse name disambiguation (`"Name|BirthYear"` keys, 5-year gap = new horse)
-- `segments.py` — extract S1/S2/S3 segment times from `indiv_fractionals`
+- `segments.py` — extract S1/S2/S3 segment times from `indiv_fractionals` (supporting analysis, not in main pipeline)
+
+### Output Classification (for downstream consumers)
+
+| Table | Pre-race safe? | Notes |
+|---|---|---|
+| `rkm_velocity_curves` | **Yes** | Career curves computed from historical data prior to any race |
+| `rkm_track_offsets` | **Yes** | Static adjustments |
+| `rkm_current_form` | **Yes** | Computed from races PRIOR to each snapshot date |
+| `rkm_market_analysis` | **Partially** | `model_prob`, `odds_prob`, `edge` are pre-race. `won` column is post-race. |
+| `rkm_race_performance` | **No** | Uses actual fractional splits from the race itself |
+| `rkm_race_situations` | **No** | Depends on `rkm_race_performance.pace_scenario` (post-race). Also stores `fav_finish_position`. |
+
+[race-day-sim](https://github.com/robinhowlett/race-day-sim) must only query the pre-race-safe tables during blinded simulation. See its `docs/simulation-protocol.md` for the full firewall specification.
 
 ### Key Design Decisions
 
@@ -72,9 +83,11 @@ Separate curves for sprint (≤6.5f) vs route (>6.5f) per horse per surface.
 
 ## Database
 
-Source tables (from pdf-importer): `races`, `starters`, `indiv_fractionals`, `points_of_call`, `fractionals`, `exotics`, `breeding`
+Requires PostgreSQL with the `handycapper` schema populated by [pdf-importer](https://github.com/robinhowlett/pdf-importer).
 
-RKM tables: `rkm_velocity_curves`, `rkm_track_offsets`, `rkm_race_performance`, `rkm_market_analysis`, `rkm_current_form`, `rkm_race_situations`, `rkm_race_shape` (retained from v1)
+Source tables (read): `races`, `starters`, `indiv_fractionals`, `points_of_call`, `fractionals`, `exotics`, `breeding`
+
+RKM tables (written by this project): `rkm_velocity_curves`, `rkm_track_offsets`, `rkm_race_performance`, `rkm_market_analysis`, `rkm_current_form`, `rkm_race_situations`
 
 Data range: 1997-2016 (earlier years have coarser timing precision).
 
@@ -84,7 +97,7 @@ Data range: 1997-2016 (earlier years have coarser timing precision).
 |---|---|---|
 | `RKM_DATABASE_URL` | — | Full connection string (overrides individual vars) |
 | `RKM_DB_HOST` | `localhost` | Postgres host |
-| `RKM_DB_PORT` | `5434` | Postgres port (5434 = SSH tunnel to robinpc) |
+| `RKM_DB_PORT` | `5432` | Postgres port |
 | `RKM_DB_NAME` | `handycapper` | Database name |
 | `RKM_DB_USER` | `handycapper` | Username |
 | `RKM_DB_PASSWORD` | `handycapper` | Password |

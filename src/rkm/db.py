@@ -8,7 +8,7 @@ def get_connection_string() -> str:
     if url := os.environ.get("RKM_DATABASE_URL"):
         return url
     host = os.environ.get("RKM_DB_HOST", "localhost")
-    port = os.environ.get("RKM_DB_PORT", "5434")
+    port = os.environ.get("RKM_DB_PORT", "5432")
     name = os.environ.get("RKM_DB_NAME", "handycapper")
     user = os.environ.get("RKM_DB_USER", "handycapper")
     password = os.environ.get("RKM_DB_PASSWORD", "handycapper")

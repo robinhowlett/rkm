@@ -60,26 +60,34 @@ Phases run sequentially. Each reads from prior phases' output tables. Total comp
 
 ## Setup
 
-Requires Python 3.11+ and access to the `handycapper` PostgreSQL database.
+Requires Python 3.11+ and access to the `handycapper` PostgreSQL database (populated by [pdf-importer](https://github.com/robinhowlett/pdf-importer)).
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Database via SSH tunnel to robinpc
-ssh -f -N -L 5434:127.0.0.1:5432 robinpc
+# Configure database (defaults shown)
+export RKM_DB_HOST=localhost
+export RKM_DB_PORT=5432
+export RKM_DB_NAME=handycapper
+export RKM_DB_USER=handycapper
+export RKM_DB_PASSWORD=handycapper
 
-# Run (in order)
-python scripts/compute_curves.py
-python scripts/compute_adjustments.py
-python scripts/compute_race_performance.py
-python scripts/compute_market.py
-python scripts/compute_form.py
-python scripts/compute_situations.py
+# Run (in order — each phase writes to the database)
+python scripts/compute_curves.py           # → rkm_velocity_curves
+python scripts/compute_adjustments.py      # → rkm_track_offsets
+python scripts/compute_race_performance.py # → rkm_race_performance
+python scripts/compute_market.py           # → rkm_market_analysis
+python scripts/compute_form.py             # → rkm_current_form
+python scripts/compute_situations.py       # → rkm_race_situations
 ```
+
+Each script TRUNCATEs its target table and COPYs fresh results. These are full recomputes (~3-4 hours total for 1997-2016 corpus).
 
 ## Related Projects
 
 - [chart-parser](https://github.com/robinhowlett/chart-parser) — extracts structured data from Equibase PDF race charts
 - [pdf-importer](https://github.com/robinhowlett/pdf-importer) — bulk loads chart-parser output into PostgreSQL
+- [wagering-analytics](https://github.com/robinhowlett/wagering-analytics) — Harville/Stern calibration + payoff prediction models
+- [race-day-sim](https://github.com/robinhowlett/race-day-sim) — blinded backtesting (reads rkm output tables)
 - [redboarders](https://github.com/robinhowlett/redboarders) — Bet Doctor wagering analysis + Redboarders handicapping game
