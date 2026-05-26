@@ -90,4 +90,3 @@ Each script TRUNCATEs its target table and COPYs fresh results. These are full r
 - [pdf-importer](https://github.com/robinhowlett/pdf-importer) — bulk loads chart-parser output into PostgreSQL
 - [wagering-analytics](https://github.com/robinhowlett/wagering-analytics) — Harville/Stern calibration + payoff prediction models
 - [race-day-sim](https://github.com/robinhowlett/race-day-sim) — blinded backtesting (reads rkm output tables)
-- [redboarders](https://github.com/robinhowlett/redboarders) — Bet Doctor wagering analysis + Redboarders handicapping game
