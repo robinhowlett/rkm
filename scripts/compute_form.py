@@ -35,7 +35,7 @@ FROM handycapper.races r
 JOIN handycapper.starters s ON s.race_id = r.id
 JOIN handycapper.indiv_fractionals inf ON inf.starter_id = s.id
 WHERE r.breed = 'TB'
-  AND r.date BETWEEN '1997-01-01' AND '2016-12-31'
+  AND r.date BETWEEN '1991-01-01' AND '2017-12-31'
   AND r.number_of_runners >= 4
   AND r.surface IN ('Dirt', 'Turf', 'Synthetic')
   AND inf.millis IS NOT NULL AND inf.feet IS NOT NULL

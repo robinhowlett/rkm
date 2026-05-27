@@ -8,7 +8,7 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 DECAY_FACTOR = 0.90  # per 30 days — half-life ≈ 6.6 months
-MIN_PRIOR_RACES = 2
+MIN_PRIOR_RACES = 1  # lowered from 2 → 1 for broader coverage (Phase 3)
 MIN_VELOCITY = 30.0
 MAX_VELOCITY = 85.0
 
@@ -67,7 +67,7 @@ def compute_form_at_date(prior_observations: list[dict], race_date, career_v0: f
             all_velocities.append(v)
             all_weights.append(weight)
 
-    if len(all_distances) < 8:  # need enough points for a meaningful fit
+    if len(all_distances) < 4:  # lowered from 8 → 4 (1 race has 4-6 points)
         return None
 
     d_arr = np.array(all_distances)
