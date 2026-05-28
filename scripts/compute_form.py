@@ -132,8 +132,10 @@ def main():
         race_obs = [race_obs[i] for i in sorted_indices]
         race_starters = [race_starters[i] for i in sorted_indices]
 
-        # For each race (starting from the 3rd), compute form from prior races
-        for i in range(2, len(race_obs)):
+        # For each race (starting from the 2nd), compute form from prior races.
+        # MIN_PRIOR_RACES=1 in form.py allows snapshots from a single prior race;
+        # the loop bound must match so 2nd-start horses get a snapshot.
+        for i in range(1, len(race_obs)):
             starter_id, race_id, race_date = race_starters[i]
             prior = race_obs[:i]  # all races before this one
 
