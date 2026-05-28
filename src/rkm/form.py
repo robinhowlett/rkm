@@ -10,7 +10,10 @@ log = logging.getLogger(__name__)
 DECAY_FACTOR = 0.90  # per 30 days — half-life ≈ 6.6 months
 MIN_PRIOR_RACES = 1  # lowered from 2 → 1 for broader coverage (Phase 3)
 MIN_VELOCITY = 30.0
-MAX_VELOCITY = 85.0
+MAX_VELOCITY = 70.0  # observation filter — above 70 ft/s is a timing artifact
+                     # (empirical: 0.016% of indiv_fractionals exceed, max
+                     # observed 2,671 ft/s, clearly bad data). Aligned with
+                     # curves.py:MAX_VELOCITY per RKM #6.
 
 
 @dataclass
