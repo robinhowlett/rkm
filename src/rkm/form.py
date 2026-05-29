@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from rkm.curves import POSITIVE_SLOPE_CLAMP_THRESHOLD
+
 log = logging.getLogger(__name__)
 
 DECAY_FACTOR = 0.90  # per 30 days — half-life ≈ 6.6 months
@@ -89,8 +91,13 @@ def compute_form_at_date(prior_observations: list[dict], race_date, career_v0: f
     # Sanity checks
     if intercept < 40 or intercept > 85:
         return None
-    if slope > 0.001:  # shouldn't be accelerating overall
-        slope = 0.0  # clamp to flat
+    if slope > POSITIVE_SLOPE_CLAMP_THRESHOLD:
+        # Shouldn't be accelerating overall — clamp to flat. Recent-form
+        # fits use few weighted observations, so spurious positive slope
+        # from noise is plausible; rejecting (as curves.py does) would
+        # drop usable form coverage. See curves.py:POSITIVE_SLOPE_CLAMP_THRESHOLD
+        # for the rationale behind the asymmetric handling.
+        slope = 0.0
 
     current_v0 = round(float(intercept), 2)
     current_decay = round(float(-slope * 1000), 4)  # per 1000ft, positive

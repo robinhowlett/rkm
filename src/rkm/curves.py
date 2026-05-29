@@ -24,6 +24,15 @@ MAX_BEATEN_LENGTHS = 30
 MIN_VELOCITY = 30.0  # ft/s — anything below is not a real performance
 MAX_VELOCITY = 70.0  # ft/s — anything above is a data error
 
+# A positive slope means the horse accelerates over distance — physically
+# implausible at career scale. This module REJECTS such fits (returns None);
+# form.py CLAMPS to flat instead. The asymmetry is intentional: a career
+# curve fit on many races with a positive slope strongly indicates bad
+# data; a recent-form curve fit on few weighted observations is more
+# likely to show spurious positive slope from noise, where rejecting
+# would discard usable form coverage. Both modules share this threshold.
+POSITIVE_SLOPE_CLAMP_THRESHOLD = 0.001
+
 
 @dataclass
 class CurveFit:
@@ -119,7 +128,10 @@ def fit_horse_curve(all_race_points: list[list[dict]],
     # Sanity: v0 should be physically plausible and slope should be non-positive
     if intercept < 40 or intercept > 85:  # 85 ft/s ≈ 58 mph, beyond any horse
         return None
-    if slope > 0.001:  # horse accelerating overall — unusual, likely bad data or sprinter quirk
+    if slope > POSITIVE_SLOPE_CLAMP_THRESHOLD:
+        # Horse accelerating overall — unusual at career scale, likely bad
+        # data or sprinter quirk. Reject the fit (form.py clamps instead;
+        # see POSITIVE_SLOPE_CLAMP_THRESHOLD docstring for the asymmetry).
         return None
 
     decay_rate = -slope * 1000  # convert to ft/s per 1000ft (positive number)
