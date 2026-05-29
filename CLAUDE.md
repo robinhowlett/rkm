@@ -66,7 +66,7 @@ Separate curves for sprint (≤6.5f) vs route (>6.5f) per horse per surface.
 |---|---|---|
 | `rkm_velocity_curves` | **Yes** | Career curves computed from historical data prior to any race |
 | `rkm_track_offsets` | **Yes** | Static adjustments |
-| `rkm_current_form` | **Yes** | Computed from races PRIOR to each snapshot date |
+| `rkm_current_form` | **Yes** | All columns (current_v0, current_decay, career_v0, career_decay, v0_trend) computed from races strictly PRIOR to each snapshot date. recent vs career-to-date — neither leaks future races. |
 | `rkm_market_analysis` | **Partially** | `model_prob`, `odds_prob`, `edge` are pre-race. `won` column is post-race. |
 | `rkm_race_performance` | **No** | Uses actual fractional splits from the race itself |
 | `rkm_race_situations` | **No** | Depends on `rkm_race_performance.pace_scenario` (post-race). Also stores `fav_finish_position`. |

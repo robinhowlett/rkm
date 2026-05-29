@@ -48,20 +48,26 @@ def main():
     log.info("Building horse keys...")
     horse_keys_by_starter = build_horse_keys()
 
-    log.info("Loading career curves...")
+    # RKM-T1.4: career_v0 / career_decay are now computed per-snapshot from
+    # the trailing prior observations (unweighted polyfit on the same data
+    # as the recent-weighted current_v0/current_decay), instead of being
+    # joined from rkm_velocity_curves' static full-career fit. Static fits
+    # leaked future races into the baseline, breaking the pre-race firewall
+    # for v0_trend.
+    #
+    # We still load the set of (horse_key, surface, distance_zone) that
+    # have a published career curve as a quality gate — it filters out
+    # horses with too-few observations to fit a meaningful curve at all.
+    log.info("Loading horse-curve eligibility set...")
     with connect_raw() as conn:
-        career_curves = pd.read_sql("""
-            SELECT horse_key, surface, distance_zone, adj_v0 AS career_v0, decay_rate AS career_decay
+        eligible = pd.read_sql("""
+            SELECT horse_key, surface, distance_zone
             FROM handycapper.rkm_velocity_curves
             WHERE adj_v0 IS NOT NULL
         """, conn)
-
-    career_lookup = {}
-    for _, row in career_curves.iterrows():
-        key = (row["horse_key"], row["surface"], row["distance_zone"])
-        career_lookup[key] = (float(row["career_v0"]), float(row["career_decay"]))
-
-    log.info(f"Loaded {len(career_lookup):,} career curves")
+    eligible_keys = set(zip(eligible["horse_key"], eligible["surface"],
+                            eligible["distance_zone"]))
+    log.info(f"Loaded {len(eligible_keys):,} eligible horse curves")
 
     log.info("Loading fractional data...")
     with connect_raw() as conn:
@@ -83,10 +89,10 @@ def main():
     )
     df = df.merge(race_max_feet[["race_id", "distance_zone"]], on="race_id")
 
-    # Pre-filter: only keep data for horses that have career curves
-    valid_keys = set(career_lookup.keys())
+    # Pre-filter: only keep data for horses with a published career curve
+    # (a quality gate; horses with too-few observations are dropped here).
     df["group_key"] = list(zip(df["horse_key"], df["surface"], df["distance_zone"]))
-    df = df[df["group_key"].isin(valid_keys)].copy()
+    df = df[df["group_key"].isin(eligible_keys)].copy()
     df = df.drop(columns=["group_key"])
     log.info(f"After filtering to horses with curves: {len(df):,} observations")
 
@@ -98,12 +104,6 @@ def main():
     processed = 0
 
     for (horse_key, surface, zone), group_df in groups:
-        career = career_lookup.get((horse_key, surface, zone))
-        if career is None:
-            continue
-
-        career_v0, career_decay = career
-
         # Group into per-race observations
         race_obs = []
         race_starters = []  # (starter_id, race_id, race_date)
@@ -139,7 +139,7 @@ def main():
             starter_id, race_id, race_date = race_starters[i]
             prior = race_obs[:i]  # all races before this one
 
-            snapshot = compute_form_at_date(prior, race_date, career_v0, career_decay)
+            snapshot = compute_form_at_date(prior, race_date)
             if snapshot is None:
                 continue
 

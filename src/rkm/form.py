@@ -29,15 +29,25 @@ class FormSnapshot:
     days_since_last: int
 
 
-def compute_form_at_date(prior_observations: list[dict], race_date, career_v0: float,
-                         career_decay: float) -> FormSnapshot | None:
-    """Compute time-weighted curve from prior observations.
+def compute_form_at_date(prior_observations: list[dict], race_date) -> FormSnapshot | None:
+    """Compute trailing-career and recent-weighted curves from prior observations.
+
+    Both fits use ONLY prior_observations (races strictly before race_date).
+    They differ only in their weighting profile:
+
+      * current_v0 / current_decay: weighted polyfit, exponential decay by
+        days-ago (DECAY_FACTOR ** days/30). Reflects recent form.
+      * career_v0 / career_decay: unweighted polyfit on the same data.
+        Reflects the horse's career-to-date.
+
+    v0_trend = current_v0 - career_v0 captures "recent vs career-to-date"
+    rather than the prior implementation's "recent vs full-career" — which
+    leaked future races into the baseline. See RKM-T1.4 for context.
 
     Args:
         prior_observations: list of {race_date, distances: [float], velocities: [float]}
             Each entry represents one prior race's velocity points.
         race_date: the date we're computing form FOR (entering this race)
-        career_v0, career_decay: the static career curve parameters
 
     Returns FormSnapshot or None if insufficient data.
     """
@@ -79,28 +89,44 @@ def compute_form_at_date(prior_observations: list[dict], race_date, career_v0: f
     v_arr = np.array(all_velocities)
     w_arr = np.array(all_weights)
 
-    # Weighted linear regression
+    # Recent-weighted regression (current form).
     try:
-        coeffs = np.polyfit(d_arr, v_arr, 1, w=w_arr)
+        recent_coeffs = np.polyfit(d_arr, v_arr, 1, w=w_arr)
     except (np.linalg.LinAlgError, ValueError):
         return None
 
-    slope = coeffs[0]
-    intercept = coeffs[1]
-
-    # Sanity checks
-    if intercept < 40 or intercept > 85:
+    # Unweighted regression on the same observations (career-to-date).
+    # Same data, only the weighting differs — the trailing aggregate the
+    # RKM-T1.4 audit recommended. Strictly point-in-time-safe because every
+    # observation is already from a race before race_date.
+    try:
+        career_coeffs = np.polyfit(d_arr, v_arr, 1)
+    except (np.linalg.LinAlgError, ValueError):
         return None
-    if slope > POSITIVE_SLOPE_CLAMP_THRESHOLD:
+
+    recent_slope, recent_intercept = recent_coeffs[0], recent_coeffs[1]
+    career_slope, career_intercept = career_coeffs[0], career_coeffs[1]
+
+    # Sanity checks on the recent fit (the leading metric we surface)
+    if recent_intercept < 40 or recent_intercept > 85:
+        return None
+    if recent_slope > POSITIVE_SLOPE_CLAMP_THRESHOLD:
         # Shouldn't be accelerating overall — clamp to flat. Recent-form
         # fits use few weighted observations, so spurious positive slope
         # from noise is plausible; rejecting (as curves.py does) would
         # drop usable form coverage. See curves.py:POSITIVE_SLOPE_CLAMP_THRESHOLD
         # for the rationale behind the asymmetric handling.
-        slope = 0.0
+        recent_slope = 0.0
+    # Same clamp for the career fit. Don't reject — career and recent
+    # share the same data distribution; if recent passed the intercept
+    # gate the career intercept is bounded similarly in practice.
+    if career_slope > POSITIVE_SLOPE_CLAMP_THRESHOLD:
+        career_slope = 0.0
 
-    current_v0 = round(float(intercept), 2)
-    current_decay = round(float(-slope * 1000), 4)  # per 1000ft, positive
+    current_v0 = round(float(recent_intercept), 2)
+    current_decay = round(float(-recent_slope * 1000), 4)
+    career_v0 = round(float(career_intercept), 2)
+    career_decay = round(float(-career_slope * 1000), 4)
     v0_trend = round(current_v0 - career_v0, 2)
 
     return FormSnapshot(
